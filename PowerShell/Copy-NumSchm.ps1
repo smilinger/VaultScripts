@@ -3,7 +3,7 @@
 Copy a numbering scheme in vault.
 
 .DESCRIPTION
-The Copy-NumSchm.ps1 script let the user select a numbering scheme in 
+The Copy-NumSchm.ps1 script let the user select a numbering scheme in
 vault and copy it with a new name.
 
 .PARAMETER VaultUser
@@ -45,14 +45,19 @@ Param(
     [string]$VaultServer,
     [Parameter(Mandatory = $True)]
     [string]$Vault,
-    [string]$VaultVersion = "2019"
+    [string]$VaultVersion = '2019'
 )
 
 $buildNumbers = @{
-    "2016" = "21.0"
-    "2017" = "22.0"
-    "2018" = "23.0"
-    "2019" = "24.0"
+    '2016' = '21.0'
+    '2017' = '22.0'
+    '2018' = '23.0'
+    '2019' = '24.0'
+    '2020' = '25.0'
+    '2021' = '26.0'
+    '2022' = '27.0'
+    '2023' = '28.0'
+    '2024' = '29.0'
 }
 
 Write-Host
@@ -65,7 +70,7 @@ if ($VaultVersion -notin $buildNumbers.Keys)
 
 $buildNumber = $buildNumbers[$VaultVersion]
 
-$installLocation = Get-ItemPropertyValue "HKLM:\SOFTWARE\Autodesk\PLM\Autodesk Vault Professional $buildNumber\Common\" "InstallLocation" -ErrorAction SilentlyContinue
+$installLocation = Get-ItemPropertyValue "HKLM:\SOFTWARE\Autodesk\PLM\Autodesk Vault Professional $buildNumber\Common\" 'InstallLocation' -ErrorAction SilentlyContinue
 if (!$installLocation)
 {
     Write-Host -ForegroundColor Red "Vault $VaultVersion is not installed.`n"
@@ -99,22 +104,30 @@ catch
 }
 
 $documentService = $serviceManager.DocumentService
+$numberingService = $serviceManager.NumberingService
+if ($numberingService)
+{
+    $numSchms = $numberingService.GetNumberingSchemes('FILE', 'All')
+}
+else
+{
+    $numSchms = $documentService.GetNumberingSchemesByType('All')
+}
 
-$numSchms = $documentService.GetNumberingSchemesByType("All")
 if (!$numSchms)
 {
     Write-Host -ForegroundColor Red "There is no numbering scheme in your Vault!`n"
     return
 }
 
-Write-Host "The numbering schemes currently in your Vault:"
+Write-Host 'The numbering schemes currently in your Vault:'
 
 $Props = @(
-    @{ Label = "Id"; Expression = { $_.SchmID } }
-    "Name"
-    @{ Label = "Is Active"; Expression = { $_.IsAct } }
-    @{ Label = "Is Default"; Expression = { $_.IsDflt } }
-    @{ Label = "Is Used"; Expression = { $_.IsInUse } }
+    @{ Label = 'Id'; Expression = { $_.SchmID } }
+    'Name'
+    @{ Label = 'Is Active'; Expression = { $_.IsAct } }
+    @{ Label = 'Is Default'; Expression = { $_.IsDflt } }
+    @{ Label = 'Is Used'; Expression = { $_.IsInUse } }
 )
 $numSchms | Format-Table $Props
 
@@ -122,30 +135,38 @@ do
 {
     try
     {
-        [long]$schmId = Read-Host -Prompt "Enter the id of the numbering scheme you want to copy"
+        [long]$schmId = Read-Host -Prompt 'Enter the id of the numbering scheme you want to copy'
     }
     catch { }
 } while ($schmId -notin $numSchms.SchmID)
 
-$numSchm = $numSchms | Where-Object SchmID -eq $schmId
+$numSchm = $numSchms | Where-Object SchmID -EQ $schmId
 
 Write-Host "`nThe numbering scheme you select is: " -NoNewline
 Write-Host -ForegroundColor Green "$($numSchm.Name)`n"
 
 do
 {
-    $newSchmName = Read-Host -Prompt "Enter the name for the new numbering scheme"
+    $newSchmName = Read-Host -Prompt 'Enter the name for the new numbering scheme'
     if ($newSchmName -in $numSchms.Name)
     {
         Write-Host -ForegroundColor Yellow "`nThe name is already used.`n"
-        $newSchmName = ""
+        $newSchmName = ''
     }
 } while (!$newSchmName)
 
 try
 {
-    $newSchm = $documentService.AddNumberingScheme($newSchmName, $numSchm.FieldArray, $numSchm.ToUpper)
-    $newSchm = $documentService.ActivateNumberingSchemes($newSchm.SchmID)[0]
+    if ($numberingService)
+    {
+        $newSchm = $numberingService.AddNumberingScheme('FILE', $newSchmName, $numSchm.Provider, $numSchm.FieldArray, $numSchm.ToUpper, $numSchm.ReuseNum)
+        $newSchm = $numberingService.EnableNumberingSchemes($newSchm.SchmID, $true)[0]
+    }
+    else
+    {
+        $newSchm = $documentService.AddNumberingScheme($newSchmName, $numSchm.FieldArray, $numSchm.ToUpper)
+        $newSchm = $documentService.ActivateNumberingSchemes($newSchm.SchmID)[0]
+    }
 
     Write-Host -ForegroundColor Green "`nThe numbering scheme is successfully copied.`n"
 }
